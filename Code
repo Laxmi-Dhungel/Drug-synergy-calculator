@@ -1,0 +1,167 @@
+
+
+print("Please make sure your file is saved in .csv format.")
+###The while loop is used here so that I have option at the end to run another data sets if i want to. 
+#It will ask do you want to analyze another set of data. And if I type 'y' then I can run another set of data without rerunning the code again.
+user_input=True
+while user_input:
+    inf=input("Please enter the file name: ") #This code wants to input the file name that will be used for further analysis.
+    #Read file
+    f=open(inf, 'r') #Opening and reading file
+    #import packages pandas,numpy, seaborn, matplotlib.pyplot, pairwise_tukeyhsd and annotator
+    import pandas as pd
+    import numpy as np
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    from statsmodels.stats.multicomp import pairwise_tukeyhsd
+    from statannotations.Annotator import Annotator
+    
+    data=pd.read_csv(f, sep=',', header=None) #Reading file as pandas DataFrame. The header is kept none because while reading pandas renamed the duplicate columns however, I wanted duplicate columns as it is so that I can combine them for mean calculation and other analysis.
+    #Following two steps are done to keep column name without pandas renaming it. First, first row was used to rename columns. Second, first row for data that has column name was removed so that there are no two rows with column name.
+    data.columns = data.iloc[0] # replace column with first row
+    data = data.drop(0)  # remove the first row
+    
+    
+    First_row_column_shell=input("Please enter the name you have on the first shell of your table in your csv file: ")#This input requires user to put name of first row_column shell as this information will be used in analysis. 
+    
+    control_name=input("Please enter the name you used for control: ")#Since the control name can vary with each user and experiments. The control name is being asked to be filled by user.
+   
+    data.set_index( First_row_column_shell, inplace=True)#For convenience, we are setting the first_row_column_shell as an index and the change is updated in current data
+    
+    data = data.astype(float)#During conversion of first rows to column, the data got converted to string. Hence, this code changes data back to float.
+    
+    control_OD=data[data.index==control_name]#This code is used to get control data, which is the data that have control_name.
+    
+    np_control_OD=np.array(control_OD)#For division by control_data to get percentage survival, it is important to convert the data to numpy array.
+    
+    percentage_survival=(data/np_control_OD)*100 #The formula for percentage survial is (Treatment(OD)/Control (OD))*100. Hence, whole data is being divided by control_OD and multiplied by 100 to get data for percentage survival for each treatment.
+    
+    #Mean percentage_survival is calculated. The data is grouped by columns as our replicate data lies on different columns. Axis is set to 1 to calculate mean for each row.
+    mean_percentage_survival=percentage_survival.groupby(by=percentage_survival.columns, axis=1, sort=False).mean()
+    
+    #In the next step, I calculated percentage survival without control.
+    #In the csv file, last row was filled with control values for convenience for data analysis (percentage survival calculation). And this format is expected to use for this code. However, we don't need this row for graphs as the shell containing values for concentration 0 for each drug will represent the control in the images.
+    percentage_survival_without_control=percentage_survival[percentage_survival.index!=control_name]
+    
+    #Similarly, the mean_percentage_survival without control is selected.
+    mean_percentage_survival_without_control=mean_percentage_survival[mean_percentage_survival.index!=control_name]
+    
+    #Heat map for the synergy data
+     
+    ax = plt.axes()
+    
+    title_heatmap=input("Please add title to your heatmap: ") # Asking user to give title for heatmap
+    
+    x_label=input("Please add xlabel to heatmap: ") # Asking user to give xlabel
+    
+    y_label=input("Please add ylabel to heatmap: ") #Asking user to give ylabel
+    
+    #Heat map for data: mean_percentage_survival_without_control
+    heat_map_mean_percentage_survival=sns.heatmap(data=mean_percentage_survival_without_control, ax=ax, cbar_kws={'label': 'Percentage survival'})
+    
+    ax.set_title(title_heatmap, fontsize = 20)
+    
+    ax.set(xlabel=x_label, ylabel=y_label)
+    
+    ax.invert_yaxis()
+    
+    plt.show()
+    
+    
+    #The following code asking for user input are for barplot.
+    x_label_barchart=input("Please enter the x label for the grouped bar chart: ")
+    y_label_barchart=input("Please enter the y label for the grouped bar chart: ")
+    title_barchart=input("Please enter title for the grouped bar chart: ")
+    
+    #The data are changed from wide to long format using melt function. The data in this format is easier to be plotted on seaborn as I can use hue parameter to make a group plot. However, unchanged format (wide) can also be used to plot grouped barplot using matplotlib.pyplot.
+    percentage_survival_without_control_melt=percentage_survival_without_control.melt(ignore_index = False, var_name="variable", value_name="value")
+    
+    mean_percentage_survival_without_control_melt=mean_percentage_survival_without_control.melt(ignore_index = False, var_name="variable", value_name="value")
+    
+    # The percentage_survival_without_control_melt and percentage_survival_without_control_melt_reset_index are same data. In percentage_survival_without_control_melt, the First_row_column_shell is in index whereas First_row_column_shell is a column in percentage_survival_without_control_melt_reset_index.
+    # I did this for convenience as I can use one of them to make a barplot and another to group and perform tukeyhsd analysis. For some reasons, plotting graph after grouping for tukey hsd did not work. 
+    # Since both of them are same data, I can obtain significant pairs and significant p values from one of them and used it on the barplot. 
+    # The only difference would be to use First_row_column_shell as x in barplot if using data with no index. If data with index is used then index should be in x for the barplot.
+    percentage_survival_without_control_melt_reset_index=percentage_survival_without_control_melt.reset_index()
+    
+    #Using if statement to ask user if they want the graph with or wothout statistics.
+    statistics_input=input("Do you want grouped barplot with or without statistical analysis?" + "\n" + "You need to have atleast 3 replicates for statistical analysis." + "\n" + "Please type number as follow for the type of graph you want." + "\n" + "Grouped bar chart without statistical analysis: 1" + "\n" + "Grouped barchart with statistics: 2."+ "\n" + "Please type number here: ")
+    if statistics_input=="1":
+        sns_barplot_mean_survival=sns.barplot(data=percentage_survival_without_control_melt_reset_index, x=First_row_column_shell, y="value", hue="variable", ci="sd", edgecolor="white", capsize=0.1, errcolor = 'black', errwidth=0.8 )
+        plt.legend(title='')
+        plt.title(title_barchart)
+        plt.xticks(rotation=90)
+        plt.xlabel(x_label_barchart)
+        plt.ylabel(y_label_barchart)
+        plt.show()
+        print("Errorbar represents standard deviation.")
+    
+    
+    elif statistics_input=="2":
+        p_values_tukey=[] #an empty list for p-value is created so that all the significant p-values can be appended.
+        significant_tukey_pairs_list=[] #an empty list for groups with significant difference is created to append all the groups with significant difference in mean percentage survival
+        
+        #In the follwing steps, I used while loop to iterate over all the treatment at index and calculate the pairwise tukeyhsd for each treatment. The results obtained are stored as pandas dataframe.
+        # The p-values (significant <0.05) and significant pairs are obtained and appended to their respective lists. 
+        
+        for Treatment, percentage_survival_without_control_melt in percentage_survival_without_control_melt.groupby(percentage_survival_without_control_melt.index, sort=False): 
+            index=0
+            item=len(percentage_survival_without_control.index)
+            while index<item:
+                if Treatment==percentage_survival_without_control.index[index]:
+                        tukey=pairwise_tukeyhsd(percentage_survival_without_control_melt["value"], percentage_survival_without_control_melt["variable"])
+                        tukey_summary=tukey.summary()
+                        tukey_df = pd.DataFrame(data=tukey_summary.data[1:], columns=tukey_summary.data[0])
+                        significant_tukey=tukey_df[tukey_df["p-adj"]<=0.05]
+                        for p_values in significant_tukey["p-adj"]:
+                            if p_values<=0.05:
+                                p_values_tukey.append(p_values)
+                        
+                        i=0
+                        item_len=len(significant_tukey['group1'])
+                        while i<item_len:
+                            significant_tukey_pairs=[(percentage_survival_without_control.index[index], significant_tukey['group1'].iloc[i]), (percentage_survival_without_control.index[index], significant_tukey['group2'].iloc[i])]
+                            significant_tukey_pairs_list.append(significant_tukey_pairs)
+                            i+=1
+    
+                    
+                index+=1
+                
+        
+        # Barplot is made using seaborn as used earlier.
+        sns_barplot_mean_survival=sns.barplot(data=percentage_survival_without_control_melt_reset_index, x=First_row_column_shell, y="value", hue="variable", ci="sd", edgecolor="white", capsize=0.1, errcolor = 'black', errwidth=0.8 )
+        
+        #Annotator function is used to annotate the p values (as asteriks) for significant pairs.
+        annotator=Annotator(sns_barplot_mean_survival, significant_tukey_pairs_list,data=percentage_survival_without_control_melt_reset_index, x=First_row_column_shell, y="value", hue="variable")
+        annotator.configure(text_format="star", loc="inside")
+        annotator.set_pvalues_and_annotate(p_values_tukey)
+        
+        plt.legend(title='') #To not have any title for the legend
+        plt.title(title_barchart) #ttile for barplot
+        plt.xticks(rotation=90) #To rotate x ticks label at 90 degree.
+        plt.xlabel(x_label_barchart) #x label 
+        plt.ylabel(y_label_barchart) #ylabel
+        
+        plt.show() # to show the plot
+        print("Errorbar represents standard deviation.")
+        print("Statistical test for significance difference based on pairwise Tukeyhsd analysis.")
+    
+    
+    else:
+        print("None") # To print something if user inputs nothing.
+        
+    # The data for percentage survival can be further analyzed for synergy using synergy finder website. The website want data to be in certain format. Transferring mean_percentage survival in the melted format can be useful if user want further analysis of data for synergy determination.
+    #The following code is to write csv file for mean percentage survival data and asks user if they want it.
+    write_csv_mean_percentage_survival=input("Do you want to transfer the results on mean percentage survival to csv files? You may need this to use for synergy finder. If yes then type 'yes' if not press any other key: ")
+    if write_csv_mean_percentage_survival=="yes":
+        csv_file_name_synergy_exp=input("Please type the name of file you want to create in .csv format: ")
+        mean_percentage_survival_without_control_melt.to_csv(csv_file_name_synergy_exp) # write csv file
+
+    
+    #The following code asks users if they want to continue another set of data. If 'y' then another set of data can be uploaded. That's why this code works like calculator providing images and statistical analysis. :)
+    continue_input=input("Type 'y' if you want to analyze next set of data if not type any other key: ")
+    if continue_input=='y':
+        user_input=True
+    else:
+        user_input=False
+    f.close() #close the file. Important.
